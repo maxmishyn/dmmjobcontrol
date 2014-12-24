@@ -239,6 +239,44 @@ class tx_dmmjobcontrol_pi1 extends tslib_pibase {
         $selectAdd[] = 'tx_dmmjobcontrol_job.*';
         $whereAdd[] = $this->whereAdd;
 
+        // Setup predefined filtering 
+        if (count($this->conf['prefilter.']) ) {
+
+            foreach ($this->conf['prefilter.'] AS $field => $value) {
+                if (is_array($value) && count($value) == 1 && current($value) == -1) {
+                    continue;
+                }
+
+                if (isset($TCA['tx_dmmjobcontrol_job']['columns'][$field]['config']['MM'])) {
+                    $table = $TCA['tx_dmmjobcontrol_job']['columns'][$field]['config']['MM'];
+                    $tableAdd[] = $table;
+                    $whereAdd[] = $table.'.uid_local=tx_dmmjobcontrol_job.uid AND ('.$table.'.uid_foreign='. intval($value).')';
+                } elseif ($field == 'keyword') {
+                    $keywords = str_replace(array(','), ' ', $value);
+                    $keywords = explode(' ', $keywords);
+
+                    foreach ($keywords AS $keyword) {
+                        $keyword = addslashes($keyword);
+
+                        $whereAdd[] = '(tx_dmmjobcontrol_job.job_title LIKE "%'.$keyword.'%" OR '.
+                        'tx_dmmjobcontrol_job.job_description LIKE "%'.$keyword.'%" OR '.
+                        'tx_dmmjobcontrol_job.location LIKE "%'.$keyword.'%" OR '.
+                        'tx_dmmjobcontrol_job.reference LIKE "%'.$keyword.'%" OR '.
+                        'tx_dmmjobcontrol_job.job_requirements LIKE "%'.$keyword.'%")';
+                    }
+                } elseif (isset($TCA['tx_dmmjobcontrol_job']['columns'][$field])) {
+                // !!!
+                // listQuery doesn't do IN statement
+                // !!!
+                $value = current($value);
+                    $selectAdd[] = 'tx_dmmjobcontrol_job.'.$field.' AS '.$field;
+                    $whereAdd[] = $GLOBALS['TYPO3_DB']->listQuery($field, $value, 'tx_dmmjobcontrol_job');
+                } else {
+                    continue;
+                }
+            }
+        }
+
         // If there is a search-session, then extend the query arrays to make the search (but not for rss feeds of course)
         if (!$this->rssMode && !$this->conf['ignore_search']) {
             $session = $GLOBALS['TSFE']->fe_user->getKey('ses', $this->prefixId);
